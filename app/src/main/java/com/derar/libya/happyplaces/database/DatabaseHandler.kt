@@ -6,6 +6,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.widget.Toast
 import com.derar.libya.happyplaces.models.HappyPlaceModel
 import java.lang.String
 
@@ -52,7 +53,13 @@ class DatabaseHandler : SQLiteOpenHelper {
         // Create tables again
         onCreate(db);
     }
-
+    /**
+     * This function is for insert a passed happy place to
+     * local database.
+     * @param happyPlace the happy place that will inserting in the database
+     * @return Long variable if it's above 0 then inserting work successfully
+     * otherwise some problem happened when inserting
+     */
     fun addHappyPlace(happyPlace:HappyPlaceModel): Long {
        val db = this.writableDatabase
 
@@ -73,7 +80,11 @@ class DatabaseHandler : SQLiteOpenHelper {
     }
 
 
-
+    /**
+     * This function is for getting all happy places form
+     * local database.
+     * @return MutableList of HappyPlaceModel.kt objects
+     */
     @SuppressLint("Recycle")
     fun getAllHappyPlaces():MutableList<HappyPlaceModel> {
        val happyPlacesList = ArrayList<HappyPlaceModel>()
@@ -81,38 +92,48 @@ class DatabaseHandler : SQLiteOpenHelper {
         val selectQuery = "SELECT  * FROM $TABLE_NAME"
 
         val db = this.writableDatabase
-        val cursor = db.rawQuery(selectQuery, null);
+        try {
+            val cursor = db.rawQuery(selectQuery, null);
 
-        // looping through all rows and adding to list
-        if (cursor.moveToFirst()) {
-            do {
-                val id=Integer.parseInt(cursor.getString(0))
-                val title=cursor.getString(1)
-                val description=cursor.getString(2)
-                val image=cursor.getString(3)
-                val date=cursor.getString(4)
-                val location=cursor.getString(5)
-                val longitude=cursor.getString(6)
-                val latitude =cursor.getString(7)
-                val happyPlace= HappyPlaceModel(
-                    id,
-                    title,
-                    description,
-                    image,
-                    date,
-                    location,
-                    longitude.toDouble(),
-                    latitude.toDouble()
-                )
-                // Adding contact to list
-                happyPlacesList.add(happyPlace);
-            } while (cursor.moveToNext());
+            // looping through all rows and adding to list
+            if (cursor.moveToFirst()) {
+                do {
+                    val id=Integer.parseInt(cursor.getString(0))
+                    val title=cursor.getString(1)
+                    val description=cursor.getString(2)
+                    val image=cursor.getString(3)
+                    val date=cursor.getString(4)
+                    val location=cursor.getString(5)
+                    val longitude=cursor.getString(6)
+                    val latitude =cursor.getString(7)
+                    val happyPlace= HappyPlaceModel(
+                        id,
+                        title,
+                        description,
+                        image,
+                        date,
+                        location,
+                        longitude.toDouble(),
+                        latitude.toDouble()
+                    )
+                    // Adding contact to list
+                    happyPlacesList.add(happyPlace);
+                } while (cursor.moveToNext());
+            }
+        } catch (e: Exception) {
         }
 
         // return contact list
         return happyPlacesList;
     }
 
+    /**
+     * This function is for get happy place that have
+     * the same passed id from local database.
+     * @param id the happy place id that will getting from the database
+     * @return HappyPlaceModel that have the same passed id
+     * from local database.
+     */
     fun getHappyPlace(id: Int): HappyPlaceModel? {
         val db = this.readableDatabase
         val cursor: Cursor? = db.query(
@@ -153,7 +174,13 @@ class DatabaseHandler : SQLiteOpenHelper {
         return null
     }
 
-
+    /**
+     * This function is for update happy place that have
+     * the same passed happyPlace id from local database.
+     * @param happyPlace the happy place that will be updating from the database
+     * @return Int variable if it's above 0 then updating work successfully
+     * otherwise some problem happened when updating
+     */
     fun updateHappyPlace(happyPlace:HappyPlaceModel):Int {
         val db = this.writableDatabase
         val values = ContentValues()
@@ -173,7 +200,11 @@ class DatabaseHandler : SQLiteOpenHelper {
         )
     }
 
-
+    /**
+     * This function is for delete happy place that have
+     * the same passed happyPlace id from local database.
+     * @param happyPlace the happy place that will deleting from the database
+     */
     fun deleteHappyPlace(happyPlace:HappyPlaceModel) {
         val db = this.writableDatabase
         db.delete(TABLE_NAME, "$KEY_ID = ?", arrayOf(String.valueOf(happyPlace.id)))
