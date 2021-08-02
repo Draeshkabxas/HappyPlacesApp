@@ -4,9 +4,12 @@ import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
+import android.view.View
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.derar.libya.happyplaces.database.DatabaseHandler
 import com.derar.libya.happyplaces.databinding.ActivityMainBinding
 import com.derar.libya.happyplaces.models.HappyPlaceModel
+import com.happyplaces.adapters.HappyPlacesAdapter
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -21,10 +24,36 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(this, AddHappyPlaceActivity::class.java)
             startActivity(intent)
         }
-
-        val testDb=DatabaseHandler(this)
-        val id =testDb.getAllHappyPlaces()[0].id
-
-        Log.i("testDB","${testDb.getHappyPlace(id)}")
+        getHappyPlacesFormLocalDB()
     }
+
+    private fun setupHappyPlacesRecyclerView(
+        happyPlaceList: ArrayList<HappyPlaceModel>
+    ){
+        binding.rvHappyPlacesList.layoutManager = LinearLayoutManager(this)
+        binding.rvHappyPlacesList.setHasFixedSize(true)
+        val happyPlacesAdapter = HappyPlacesAdapter(this,happyPlaceList)
+        binding.rvHappyPlacesList.adapter=happyPlacesAdapter
+    }
+    private fun getHappyPlacesFormLocalDB(){
+        val db=DatabaseHandler(this)
+        val getHappyPlacesList:ArrayList<HappyPlaceModel> = ArrayList(db.getAllHappyPlaces())
+
+        if(!getHappyPlacesList.isNullOrEmpty()){
+            binding.rvHappyPlacesList.visibility= View.VISIBLE
+            binding.tvNoRecordsAvailable.visibility=View.GONE
+            setupHappyPlacesRecyclerView(getHappyPlacesList)
+        }else{
+            binding.rvHappyPlacesList.visibility= View.GONE
+            binding.tvNoRecordsAvailable.visibility=View.VISIBLE
+        }
+
+    }
+
+
+    override fun onResume(){
+        getHappyPlacesFormLocalDB()
+        super.onResume()
+    }
+
 }
