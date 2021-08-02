@@ -20,7 +20,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import com.derar.libya.happyplaces.R
+import com.derar.libya.happyplaces.database.DatabaseHandler
 import com.derar.libya.happyplaces.databinding.ActivityAddHappyPlaceBinding
+import com.derar.libya.happyplaces.models.HappyPlaceModel
 import com.karumi.dexter.Dexter
 import com.karumi.dexter.MultiplePermissionsReport
 import com.karumi.dexter.PermissionToken
@@ -37,8 +39,13 @@ class AddHappyPlaceActivity : AppCompatActivity(), View.OnClickListener {
     private lateinit var binding: ActivityAddHappyPlaceBinding
     private var cal = Calendar.getInstance()
     private lateinit var dateSetListener: DatePickerDialog.OnDateSetListener
-    private lateinit var getImageFromGallery:ActivityResultLauncher<String?>
-    private lateinit var getPhotoFromCamera:ActivityResultLauncher<Void?>
+    private lateinit var getImageFromGallery: ActivityResultLauncher<String?>
+    private lateinit var getPhotoFromCamera: ActivityResultLauncher<Void?>
+    private var saveImageToInternalStorage: Uri? = null
+    private var longitude: Double =0.0
+   private var latitude: Double =0.0
+
+
     @RequiresApi(Build.VERSION_CODES.P)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,28 +67,30 @@ class AddHappyPlaceActivity : AppCompatActivity(), View.OnClickListener {
                 updateDateInView()
             }
 
+        updateDateInView()
 
         binding.etDate.setOnClickListener(this)
         binding.tvAddImage.setOnClickListener(this)
+        binding.btnSave.setOnClickListener(this)
     }
 
     private fun initializeGetPhotoFromCamera() {
-        getPhotoFromCamera=registerForActivityResult(
+        getPhotoFromCamera = registerForActivityResult(
             ActivityResultContracts.TakePicturePreview(),
             ActivityResultCallback {
-                val imageUri=saveImageToInternalStorage(it)
-                binding.ivPlaceImage.setImageURI(imageUri)
+                saveImageToInternalStorage = saveImageToInternalStorage(it)
+                binding.ivPlaceImage.setImageURI(saveImageToInternalStorage)
             }
         )
     }
 
     @RequiresApi(Build.VERSION_CODES.P)
     private fun initializeGetImageFromGallery() {
-         getImageFromGallery=registerForActivityResult(
+        getImageFromGallery = registerForActivityResult(
             ActivityResultContracts.GetContent(),
             ActivityResultCallback {
-                val imageUri=saveImageToInternalStorage(getCapturedImage(it))
-                binding.ivPlaceImage.setImageURI(imageUri)
+                saveImageToInternalStorage = saveImageToInternalStorage(getCapturedImage(it))
+                binding.ivPlaceImage.setImageURI(saveImageToInternalStorage)
             }
         )
     }
@@ -129,7 +138,50 @@ class AddHappyPlaceActivity : AppCompatActivity(), View.OnClickListener {
                 }
                 pictureDialog.show()
             }
+            R.id.btn_save -> {
+                if(!checkIfInformationMissing()){
+                    val happyPlace=HappyPlaceModel(
+                        0,
+                        binding.etTitle.text.toString(),
+                        binding.etDescription.text.toString(),
+                        saveImageToInternalStorage.toString(),
+                        binding.etDate.text.toString(),
+                        binding.etLocation.text.toString(),
+                        longitude,
+                        latitude
+                    )
+                    val db=DatabaseHandler(this@AddHappyPlaceActivity)
+                    val addHappyPlaceModel = db.addHappyPlace(happyPlace)
+                     if (addHappyPlaceModel > 0 ) {
+                         Toast.makeText(
+                             this@AddHappyPlaceActivity,
+                             "The happy place details are inserted successful", Toast.LENGTH_SHORT
+                         ).show()
+                         finish()
+                     }
+                    else
+                    finish()
+                }
+            }
         }
+    }
+
+    private fun checkIfInformationMissing(): Boolean {
+        val information = mapOf<String?,String>(
+            binding.etTitle.text.toString() to "Please enter title",
+            binding.etDescription.text.toString() to "Please enter description",
+            binding.etDate.text.toString()to "Please enter date",
+            binding.etLocation.text.toString() to "Please enter location",
+            if (saveImageToInternalStorage==null){null} else{"good"} to "Please insert an image"
+        )
+        var isMissing:Boolean = false
+        information.forEach {
+            if (it.key.isNullOrEmpty()){
+                Toast.makeText(this@AddHappyPlaceActivity,it.value,Toast.LENGTH_SHORT).show()
+                isMissing=true
+            }
+        }
+        return isMissing
     }
 
     private fun takePhotoFromCamera() {
@@ -139,7 +191,7 @@ class AddHappyPlaceActivity : AppCompatActivity(), View.OnClickListener {
             Manifest.permission.CAMERA
         ).withListener(object : MultiplePermissionsListener {
             override fun onPermissionsChecked(report: MultiplePermissionsReport) {
-                if(report.areAllPermissionsGranted()){
+                if (report.areAllPermissionsGranted()) {
                     lunchGetPhotoFromCamera()
                 }
             }
@@ -159,10 +211,12 @@ class AddHappyPlaceActivity : AppCompatActivity(), View.OnClickListener {
     private fun lunchGetPhotoFromCamera() {
         try {
             getPhotoFromCamera.launch(null)
-        }catch (e:Exception){
-            Toast.makeText(this,
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
                 "Failed to take the image from camera.",
-                Toast.LENGTH_SHORT).show()
+                Toast.LENGTH_SHORT
+            ).show()
         }
 
     }
@@ -173,7 +227,7 @@ class AddHappyPlaceActivity : AppCompatActivity(), View.OnClickListener {
             Manifest.permission.WRITE_EXTERNAL_STORAGE
         ).withListener(object : MultiplePermissionsListener {
             override fun onPermissionsChecked(report: MultiplePermissionsReport) {
-                if(report.areAllPermissionsGranted()){
+                if (report.areAllPermissionsGranted()) {
                     lunchGetImageFromGallery()
                 }
             }
@@ -193,46 +247,49 @@ class AddHappyPlaceActivity : AppCompatActivity(), View.OnClickListener {
     private fun lunchGetImageFromGallery() {
         try {
             getImageFromGallery.launch("image/*")
-        }catch (e:Exception){
-            Toast.makeText(this,
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
                 "Failed to load the image from gallery.",
-            Toast.LENGTH_SHORT).show()
+                Toast.LENGTH_SHORT
+            ).show()
         }
-        }
+    }
 
     private fun showRationalDialogForPermission() {
-       AlertDialog.Builder(this)
-           .setMessage("It looks like you have turned off permission required for this feature." +
-                   "\n It can be enabled under the Application  settings")
-           .setPositiveButton("GO TO SETTINGS"){
-               _,_->
-              goToSettings()
-           }
-           .setNegativeButton("Cancel"){dialog,_->
-               dialog.dismiss()
-           }
-           .show()
+        AlertDialog.Builder(this)
+            .setMessage(
+                "It looks like you have turned off permission required for this feature." +
+                        "\n It can be enabled under the Application  settings"
+            )
+            .setPositiveButton("GO TO SETTINGS") { _, _ ->
+                goToSettings()
+            }
+            .setNegativeButton("Cancel") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .show()
 
     }
 
     private fun goToSettings() {
-        try{
-            val intent=Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-            val uri= Uri.fromParts("package",packageName,null)
-            intent.data=uri
+        try {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            val uri = Uri.fromParts("package", packageName, null)
+            intent.data = uri
             startActivity(intent)
-        }catch(e:Exception){
+        } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    private fun saveImageToInternalStorage(bitmap: Bitmap):Uri{
-        val wrapper=ContextWrapper(applicationContext)
-        var file=wrapper.getDir(IMAGE_DIRECTORY, MODE_PRIVATE)
-        file= File(file,"${UUID.randomUUID()}.jpg")
+    private fun saveImageToInternalStorage(bitmap: Bitmap): Uri {
+        val wrapper = ContextWrapper(applicationContext)
+        var file = wrapper.getDir(IMAGE_DIRECTORY, MODE_PRIVATE)
+        file = File(file, "${UUID.randomUUID()}.jpg")
         try {
-           val stream=FileOutputStream(file)
-            bitmap.compress(Bitmap.CompressFormat.JPEG,100,stream)
+            val stream = FileOutputStream(file)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream)
             stream.flush()
             stream.close()
         } catch (e: Exception) {
@@ -240,8 +297,8 @@ class AddHappyPlaceActivity : AppCompatActivity(), View.OnClickListener {
         return Uri.parse(file.absolutePath)
     }
 
-    companion object{
-        private const val IMAGE_DIRECTORY="HappyPlacesImages"
+    companion object {
+        private const val IMAGE_DIRECTORY = "HappyPlacesImages"
     }
 
     private fun updateDateInView() {
