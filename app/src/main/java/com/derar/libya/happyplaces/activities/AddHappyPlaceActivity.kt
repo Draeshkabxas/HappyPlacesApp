@@ -1,22 +1,33 @@
-package com.derar.libya.happyplaces
+package com.derar.libya.happyplaces.activities
 
 import android.Manifest
 import android.app.AlertDialog
 import android.app.DatePickerDialog
+import android.content.ContextWrapper
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.provider.Settings
 import android.view.View
 import android.widget.Toast
+import androidx.activity.result.ActivityResultCallback
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import com.derar.libya.happyplaces.R
 import com.derar.libya.happyplaces.databinding.ActivityAddHappyPlaceBinding
-import com.google.android.material.shape.ShapeAppearanceModel.builder
 import com.karumi.dexter.Dexter
 import com.karumi.dexter.MultiplePermissionsReport
 import com.karumi.dexter.PermissionToken
 import com.karumi.dexter.listener.PermissionRequest
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener
+import java.io.File
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -26,7 +37,9 @@ class AddHappyPlaceActivity : AppCompatActivity(), View.OnClickListener {
     private lateinit var binding: ActivityAddHappyPlaceBinding
     private var cal = Calendar.getInstance()
     private lateinit var dateSetListener: DatePickerDialog.OnDateSetListener
-
+    private lateinit var getImageFromGallery:ActivityResultLauncher<String?>
+    private lateinit var getPhotoFromCamera:ActivityResultLauncher<Void?>
+    @RequiresApi(Build.VERSION_CODES.P)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityAddHappyPlaceBinding.inflate(layoutInflater)
@@ -34,6 +47,8 @@ class AddHappyPlaceActivity : AppCompatActivity(), View.OnClickListener {
         setContentView(view)
         setSupportActionBar(binding.toolbarAddPlace)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        initializeGetImageFromGallery()
+        initializeGetPhotoFromCamera()
         binding.toolbarAddPlace.setNavigationOnClickListener {
             onBackPressed()
         }
@@ -44,8 +59,45 @@ class AddHappyPlaceActivity : AppCompatActivity(), View.OnClickListener {
                 cal.set(Calendar.DAY_OF_MONTH, dayOfMonth)
                 updateDateInView()
             }
+
+
         binding.etDate.setOnClickListener(this)
         binding.tvAddImage.setOnClickListener(this)
+    }
+
+    private fun initializeGetPhotoFromCamera() {
+        getPhotoFromCamera=registerForActivityResult(
+            ActivityResultContracts.TakePicturePreview(),
+            ActivityResultCallback {
+                val imageUri=saveImageToInternalStorage(it)
+                binding.ivPlaceImage.setImageURI(imageUri)
+            }
+        )
+    }
+
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun initializeGetImageFromGallery() {
+         getImageFromGallery=registerForActivityResult(
+            ActivityResultContracts.GetContent(),
+            ActivityResultCallback {
+                val imageUri=saveImageToInternalStorage(getCapturedImage(it))
+                binding.ivPlaceImage.setImageURI(imageUri)
+            }
+        )
+    }
+
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun getCapturedImage(selectedPhotoUri: Uri): Bitmap {
+        return when {
+            Build.VERSION.SDK_INT < 28 -> MediaStore.Images.Media.getBitmap(
+                contentResolver,
+                selectedPhotoUri
+            )
+            else -> {
+                val source = ImageDecoder.createSource(contentResolver, selectedPhotoUri)
+                ImageDecoder.decodeBitmap(source)
+            }
+        }
     }
 
     override fun onClick(p0: View?) {
@@ -71,7 +123,7 @@ class AddHappyPlaceActivity : AppCompatActivity(), View.OnClickListener {
                             choosePhotoFromGallery()
                         }
                         1 -> {
-
+                            takePhotoFromCamera()
                         }
                     }
                 }
@@ -80,14 +132,15 @@ class AddHappyPlaceActivity : AppCompatActivity(), View.OnClickListener {
         }
     }
 
-    private fun choosePhotoFromGallery() {
+    private fun takePhotoFromCamera() {
         Dexter.withContext(this).withPermissions(
             Manifest.permission.READ_EXTERNAL_STORAGE,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            Manifest.permission.CAMERA
         ).withListener(object : MultiplePermissionsListener {
             override fun onPermissionsChecked(report: MultiplePermissionsReport) {
                 if(report.areAllPermissionsGranted()){
-                    Toast.makeText(this@AddHappyPlaceActivity,"All permissions Granted",Toast.LENGTH_SHORT).show()
+                    lunchGetPhotoFromCamera()
                 }
             }
 
@@ -102,6 +155,50 @@ class AddHappyPlaceActivity : AppCompatActivity(), View.OnClickListener {
             .check()
 
     }
+
+    private fun lunchGetPhotoFromCamera() {
+        try {
+            getPhotoFromCamera.launch(null)
+        }catch (e:Exception){
+            Toast.makeText(this,
+                "Failed to take the image from camera.",
+                Toast.LENGTH_SHORT).show()
+        }
+
+    }
+
+    private fun choosePhotoFromGallery() {
+        Dexter.withContext(this).withPermissions(
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+        ).withListener(object : MultiplePermissionsListener {
+            override fun onPermissionsChecked(report: MultiplePermissionsReport) {
+                if(report.areAllPermissionsGranted()){
+                    lunchGetImageFromGallery()
+                }
+            }
+
+            override fun onPermissionRationaleShouldBeShown(
+                permissions: MutableList<PermissionRequest>,
+                token: PermissionToken
+            ) {
+                showRationalDialogForPermission()
+            }
+
+        }).onSameThread()
+            .check()
+
+    }
+
+    private fun lunchGetImageFromGallery() {
+        try {
+            getImageFromGallery.launch("image/*")
+        }catch (e:Exception){
+            Toast.makeText(this,
+                "Failed to load the image from gallery.",
+            Toast.LENGTH_SHORT).show()
+        }
+        }
 
     private fun showRationalDialogForPermission() {
        AlertDialog.Builder(this)
@@ -127,6 +224,24 @@ class AddHappyPlaceActivity : AppCompatActivity(), View.OnClickListener {
         }catch(e:Exception){
             e.printStackTrace()
         }
+    }
+
+    private fun saveImageToInternalStorage(bitmap: Bitmap):Uri{
+        val wrapper=ContextWrapper(applicationContext)
+        var file=wrapper.getDir(IMAGE_DIRECTORY, MODE_PRIVATE)
+        file= File(file,"${UUID.randomUUID()}.jpg")
+        try {
+           val stream=FileOutputStream(file)
+            bitmap.compress(Bitmap.CompressFormat.JPEG,100,stream)
+            stream.flush()
+            stream.close()
+        } catch (e: Exception) {
+        }
+        return Uri.parse(file.absolutePath)
+    }
+
+    companion object{
+        private const val IMAGE_DIRECTORY="HappyPlacesImages"
     }
 
     private fun updateDateInView() {
